@@ -1,0 +1,159 @@
+Real‑Time Voice‑Controlled Desktop Agent
+========================================
+
+Stack: SmolVLM 2.2B (local VLM) + Tauri (Rust/WebView overlay) + whisper.cpp (speech) + Python helpers.
+
+------------------------------------------------------------
+1. Why SmolVLM?
+------------------------------------------------------------
+• Open‑weights 2.2 B‑param VLM that beats many 7 B LLaVA variants on VQA while fitting in ≈3 GB (Q4_K_M).  
+• Ships as HuggingFace + GGUF; runs at ≈10 tok/s on M‑series chips via llama.cpp Metal.  
+• Already packaged in Ollama (“smolvlm” tag) for REST serving.
+
+------------------------------------------------------------
+2. Minimum Hardware & OS
+------------------------------------------------------------
+• Apple‑Silicon MacBook Air M3 (16 GB RAM)  
+• macOS 14 Sonoma (ScreenCapture entitlement required)  
+• Rust 1.77+, Node 18+, Python 3.11
+
+------------------------------------------------------------
+3. One‑Time Setup
+------------------------------------------------------------
+``bash
+$ brew install llama.cpp tauri-cli rustup python cmake portaudio ffmpeg
+$ rustup default stable
+
+# SmolVLM2 (quantised, GGUF from ggml-org)
+# Download the main model (SmolVLM2-2.2B-Instruct-Q4_K_M.gguf)
+$ curl -L -o smolvlm2-q4km.gguf "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf?download=true"
+# Download the multimodal projector (mmproj-SmolVLM2-2.2B-Instruct-f16.gguf)
+$ curl -L -o smolvlm2-mmproj-f16.gguf "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-2.2B-Instruct-f16.gguf?download=true"
+
+# Example: Running SmolVLM2 with llama-mtmd-cli
+# (This command should be run from the directory where the .gguf files were downloaded)
+# The -ngl flag offloads layers to the GPU (Metal on macOS). Adjust value as needed.
+# You'll typically provide an image and prompt to llama-mtmd-cli for it to perform a task.
+$ llama-mtmd-cli -m smolvlm2-q4km.gguf --mmproj smolvlm2-mmproj-f16.gguf -ngl 35
+
+# whisper.cpp (speech‑to‑text)
+$ git clone https://github.com/ggerganov/whisper.cpp && cd whisper.cpp && make
+$ ./main -m models/ggml-base.en.bin -f mic -nt # quick smoke‑test
+``
+
+------------------------------------------------------------
+4. Tauri Skeleton
+------------------------------------------------------------
+``bash
+$ cargo tauri init --template vanilla
+``
+
+src-tauri/tauri.conf.json ➜  "transparent": true, "decorations": false, "alwaysOnTop": true  
+Window overlay is borderless & click‑through:
+
+``rust
+use tauri::WindowBuilder;
+WindowBuilder::new(app, "overlay", tauri::WindowUrl::App("index.html".into()))
+  .transparent(true)
+  .decorations(false)
+  .always_on_top(true)
+  .skip_taskbar(true)
+  .accept_first_mouse(true)
+  .fullscreen(false)
+  .build()?;
+``
+
+------------------------------------------------------------
+5. Screen Capture & Bridge
+------------------------------------------------------------
+Python service (vision_bridge.py) exposes:  
+• GET /screenshot – returns PNG bytes (mss + Pillow)  
+• POST /predict – body = JPEG; returns JSON grid labels from llama.cpp.
+
+Tauri front‑end polls /screenshot, paints thumbnail, sends to /predict on hot‑key.
+
+Example llama.cpp call:
+
+``python
+prompt = f"<image>\\n<|end|>\\nDescribe screen using 16x9 grid."
+out = llm.create_chat_completion([{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,{b64}"}}...]])
+``
+
+------------------------------------------------------------
+6. Voice Stream
+------------------------------------------------------------
+Run whisper.cpp in a separate thread:
+
+``bash
+./stream -m ggml-small.en.bin -f default -ovtt
+``
+
+Append recognised tokens to context.txt; Tauri watches file for changes.
+
+------------------------------------------------------------
+7. Grid‑to‑Click Mapper
+------------------------------------------------------------
+mapper.rs in Tauri:
+
+``rust
+fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
+  let (gw, gh) = (screen.0 / grid.0, screen.1 / grid.1);
+  let (x, y) = (col * gw + gw/2, row * gh + gh/2);
+  enigo::Enigo::mouse_move_to(x as i32, y as i32);
+  enigo::Enigo::mouse_click(enigo::MouseButton::Left);
+}
+``
+
+------------------------------------------------------------
+8. MVP Manual Test
+------------------------------------------------------------
+1. Hot‑key ⌥ ⇧ P grabs screen, sends to SmolVLM.  
+2. Terminal shows JSON: {"button":"Start","cell":"E-3"}.  
+3. Press ⌥ ⌘ ⏎ → mapper performs the click.
+
+------------------------------------------------------------
+9. Stretch Milestones
+------------------------------------------------------------
+• Goal stack + memory: simple SQLite table goals(id,descr,status,ts)  
+• Checkpoint/Undo: tmutil localsnapshot (macOS) or Btrfs snapshot on Linux.  
+• Accessibility fallback: query AXUIElement when VLM confidence < 0.5.  
+• Replace Python bridge with Rust gRPC once stable.
+
+------------------------------------------------------------
+10. Troubleshooting
+------------------------------------------------------------
+• If screenshot == black, grant “Screen Recording” permission in System Settings → Privacy & Security.  
+• llama.cpp OOM?  Lower n_gpu_layers or quantise to Q3_K_M.  
+• Overlay steals focus?  Call set_ignore_cursor_events(true) on the window.
+
+------------------------------------------------------------
+11. References
+------------------------------------------------------------
+[1] SmolVLM‑2.2B model card (HF).  
+[2] llama.cpp Apple‑Silicon benchmarks discussion.  
+[3] SmolVLM blog post (Mar 2025).  
+[4] Tauri JS Window API docs.  
+[5] StackOverflow: click‑through overlay in Tauri.  
+[6] mss GitHub issue re: macOS screen capture.  
+[7] PyAutoGUI mouse docs.  
+[8] whisper.cpp real‑time issue thread.  
+[9] Ollama forum: SmolVLM GGUF availability.  
+[10] Google blog: PaliGemma vision models.
+
+------------------------------------------------------------
+12. Current Project Status (as of 2025-05-22 02:38)
+------------------------------------------------------------
+- **Completed:**
+  - Initial project guide drafted.
+  - Homebrew dependencies (including `llama.cpp`, `rustup`, `cargo tauri-cli`) installation command identified and executed.
+  - SmolVLM2 GGUF model (`SmolVLM2-2.2B-Instruct-Q4_K_M.gguf` saved as `smolvlm2-q4km.gguf`) downloaded.
+  - SmolVLM2 multimodal projector (`mmproj-SmolVLM2-2.2B-Instruct-f16.gguf` saved as `smolvlm2-mmproj-f16.gguf`) downloaded.
+  - Identified `llama-mtmd-cli` as the tool for running the model and drafted an example command.
+  - Successfully ran a test inference with `llama-mtmd-cli` using the downloaded SmolVLM2 model, projector, and a sample image/prompt.
+  - Proceeded with Tauri skeleton setup (as per Section 4) in `tauri_app` directory.
+  - Successfully initialized Tauri app (`tauri_app`) with a transparent, undecorated, always-on-top window, and confirmed basic functionality.
+
+- **Next Steps:**
+  - Implement screen capture & bridge (as per Section 5).
+
+Happy hacking!

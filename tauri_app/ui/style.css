@@ -1,0 +1,13 @@
+body {
+  font-family: sans-serif;
+  background-color: rgba(30, 30, 30, 0.8);
+  color: white;
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  overflow: hidden; /* For transparent, click-through overlay */
+}
+
+h1 {
+  font-size: 1.5em;
+}

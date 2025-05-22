@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Log files
+*.log
+
+# Model files
+smolvlm2-*.gguf
+
+# Tauri / Rust build artifacts
+tauri_app/src-tauri/target/
+tauri_app/target/
+
+# Node.js (common in Tauri projects, good to have)
+tauri_app/node_modules/
+tauri_app/dist/
+
+# IDE - VSCode
+.vscode/
+
+screenshot.png
