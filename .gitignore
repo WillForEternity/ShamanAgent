@@ -6,6 +6,7 @@
 
 # Model files
 smolvlm2-*.gguf
+models/
 
 # Tauri / Rust build artifacts
 tauri_app/src-tauri/target/

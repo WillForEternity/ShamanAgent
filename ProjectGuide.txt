@@ -141,21 +141,22 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 03:01)
+12. Current Project Status (as of 2025-05-22 03:33)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
   - Homebrew dependencies (including `llama.cpp`, `rustup`, `cargo tauri-cli`) installation command identified and executed.
-  - SmolVLM2 GGUF model (`SmolVLM2-2.2B-Instruct-Q4_K_M.gguf` saved as `smolvlm2-q4km.gguf`) downloaded.
-  - SmolVLM2 multimodal projector (`mmproj-SmolVLM2-2.2B-Instruct-f16.gguf` saved as `smolvlm2-mmproj-f16.gguf`) downloaded.
+  - SmolVLM2 GGUF model (`SmolVLM2-2.2B-Instruct-Q4_K_M.gguf`) downloaded and placed in `models/`.
+  - SmolVLM2 multimodal projector (`mmproj-SmolVLM2-2.2B-Instruct-f16.gguf`) downloaded and placed in `models/`.
   - Identified `llama-mtmd-cli` as the tool for running the model and drafted an example command.
   - Successfully ran a test inference with `llama-mtmd-cli` using the downloaded SmolVLM2 model, projector, and a sample image/prompt.
   - Proceeded with Tauri skeleton setup (as per Section 4) in `tauri_app` directory.
   - Successfully initialized Tauri app (`tauri_app`) with a transparent, undecorated, always-on-top window, and confirmed basic functionality.
   - Python FastAPI service (`vision_bridge.py`) created with a working `/screenshot` endpoint using `mss` and `Pillow`.
+  - Implemented the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama.cpp`, using a JSON schema (`schemas/grid.json`) to get structured output.
 
 - **Next Steps:**
-  - Implement the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama.cpp`.
   - Integrate Tauri frontend: poll `/screenshot`, display thumbnail, and send image data to `/predict` on hotkey (as per Section 5).
+  - Refine prompt and/or JSON schema to improve the detail and accuracy of the model's `grid_labels` and `actionable_cells` output.
 
 Happy hacking!
