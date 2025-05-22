@@ -141,7 +141,7 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 02:38)
+12. Current Project Status (as of 2025-05-22 03:01)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
@@ -152,8 +152,10 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
   - Successfully ran a test inference with `llama-mtmd-cli` using the downloaded SmolVLM2 model, projector, and a sample image/prompt.
   - Proceeded with Tauri skeleton setup (as per Section 4) in `tauri_app` directory.
   - Successfully initialized Tauri app (`tauri_app`) with a transparent, undecorated, always-on-top window, and confirmed basic functionality.
+  - Python FastAPI service (`vision_bridge.py`) created with a working `/screenshot` endpoint using `mss` and `Pillow`.
 
 - **Next Steps:**
-  - Implement screen capture & bridge (as per Section 5).
+  - Implement the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama.cpp`.
+  - Integrate Tauri frontend: poll `/screenshot`, display thumbnail, and send image data to `/predict` on hotkey (as per Section 5).
 
 Happy hacking!
