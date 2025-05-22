@@ -1,26 +1,65 @@
 body {
   font-family: sans-serif;
-  background-color: rgba(255, 255, 255, 0.3); /* Translucent dark gray background */
-  color: white;
+  background-color: rgba(255, 255, 255, 0.2); /* Light translucent background */
+  color: #333; /* Dark gray text */
   margin: 0;
-  /* padding: 20px; */ /* Remove padding */
-  /* text-align: center; */ /* Remove text-align */
-  overflow: hidden; /* For transparent, click-through overlay */
-  display: flex; /* Added to help with positioning if needed */
-  justify-content: flex-end; /* Align items to the right */
-  align-items: flex-end; /* Align items to the bottom */
-  height: 100vh; /* Ensure body takes full viewport height */
+  overflow: hidden; 
+  display: flex;
+  flex-direction: column; /* Stack controls and thumbnail vertically */
+  height: 100vh; 
+  padding: 15px; /* Add some padding to the body */
+  box-sizing: border-box; /* Include padding in height/width calculation */
+  border: 1px solid white; /* Solid white border for the main window area */
 }
 
-/* h1 {
-  font-size: 1.5em;
-} */ /* Comment out or remove h1 styles as h1 is removed */
+#controls-container {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; /* Allow this container to take up available space */
+  margin-bottom: 10px; /* Space between controls and thumbnail */
+  min-height: 0; /* Important for flex children with overflow */
+}
+
+#description-area {
+  background-color: rgba(255, 255, 255, 0.4); /* More opaque white for description bg */
+  border: 1px solid white; /* Solid white border */
+  color: #222; /* Darker text for description */
+  border-radius: 5px;
+  padding: 10px;
+  margin-bottom: 10px;
+  flex-grow: 1; /* Allow description to take available vertical space */
+  overflow-y: auto; /* Enable vertical scrolling */
+  min-height: 50px; /* Ensure it's visible even if empty */
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+#description-area p {
+  margin-top: 0;
+}
+
+#predict-button {
+  padding: 10px 15px;
+  font-size: 1em;
+  background-color: #6c757d; /* Bootstrap secondary-like color */
+  color: white;
+  border: 1px solid white; /* Solid white border */
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  align-self: center; /* Center button */
+}
+
+#predict-button:hover {
+  background-color: #5a6268; /* Darker shade for hover */
+}
 
 #screenshot-thumbnail {
-  width: 250px; /* Adjust width as desired */
+  width: 200px; /* Adjust width as desired */
   height: auto; /* Maintain aspect ratio */
-  border: 2px solid rgba(218, 218, 218, 0.5); /* Subtle white border */
-  border-radius: 5px; /* Slightly rounded corners */
-  margin: 15px; /* Margin from the window edges */
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); /* Optional: a little shadow for depth */
+  border: 1px solid white; /* Solid white border */
+  border-radius: 5px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); /* Lighter shadow */
+  align-self: flex-end; /* Align thumbnail to the bottom right of its space */
+  object-fit: contain; /* Ensure image scales nicely */
 }
