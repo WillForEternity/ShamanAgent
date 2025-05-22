@@ -1,13 +1,26 @@
 body {
   font-family: sans-serif;
-  background-color: rgba(30, 30, 30, 0.8);
+  background-color: transparent; /* Make background fully transparent */
   color: white;
   margin: 0;
-  padding: 20px;
-  text-align: center;
+  /* padding: 20px; */ /* Remove padding */
+  /* text-align: center; */ /* Remove text-align */
   overflow: hidden; /* For transparent, click-through overlay */
+  display: flex; /* Added to help with positioning if needed */
+  justify-content: flex-end; /* Align items to the right */
+  align-items: flex-end; /* Align items to the bottom */
+  height: 100vh; /* Ensure body takes full viewport height */
 }
 
-h1 {
+/* h1 {
   font-size: 1.5em;
+} */ /* Comment out or remove h1 styles as h1 is removed */
+
+#screenshot-thumbnail {
+  width: 250px; /* Adjust width as desired */
+  height: auto; /* Maintain aspect ratio */
+  border: 2px solid rgba(255, 255, 255, 0.5); /* Subtle white border */
+  border-radius: 5px; /* Slightly rounded corners */
+  margin: 15px; /* Margin from the window edges */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); /* Optional: a little shadow for depth */
 }

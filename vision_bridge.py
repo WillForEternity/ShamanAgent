@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Response, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 import mss
 import io
 from PIL import Image
@@ -8,6 +9,25 @@ import os
 import json
 
 app = FastAPI()
+
+# CORS configuration
+origins = [
+    "http://localhost:1420",    # Common Tauri dev server port
+    "http://127.0.0.1:1420",   # Alternative for localhost
+    "http://localhost:1430",    # Port from user's error log
+    "http://127.0.0.1:1430",   # Alternative for localhost from error log
+    "tauri://localhost",        # For production Tauri builds
+    "http://localhost:8000",    # For local testing of the API itself
+    "http://127.0.0.1:8000"   # For local testing of the API itself
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, etc.)
+    allow_headers=["*"]   # Allows all headers
+)
 
 # Configuration for llama.cpp
 # Assuming vision_bridge.py is in the project root where a 'models' directory exists
