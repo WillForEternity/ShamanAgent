@@ -141,7 +141,7 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 14:07)
+12. Current Project Status (as of 2025-05-22 14:38)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
@@ -157,6 +157,10 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
   - Tauri frontend (`tauri_app/ui/`) successfully polls `/screenshot` and displays a live thumbnail in the transparent overlay window. Backend CORS configured.
   - Removed experimental hotkey code from Tauri Rust backend (`lib.rs`) to resolve compilation issues.
   - Created `manage_dev.sh` script to simplify starting, stopping, and restarting the Python backend and Tauri frontend development servers.
+  - Enabled standard window decorations (`tauri.conf.json`) allowing the app window to be dragged and resized.
+  - Changed window background from fully transparent to translucent (`style.css`) for better visibility.
+  - Configured the Tauri window to be visible on all desktop workspaces on macOS (`lib.rs`).
+  - Enabled content protection for the Tauri window (`lib.rs`) to prevent it from appearing in its own screenshots, avoiding the recursive zoom effect.
 
 - **Next Steps:**
   - **Implement Prediction Trigger Mechanism:**
