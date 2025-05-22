@@ -19,3 +19,6 @@ tauri_app/dist/
 .vscode/
 
 screenshot.png
+
+# Python virtual environment
+.venv/
