@@ -141,7 +141,7 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 03:33)
+12. Current Project Status (as of 2025-05-22 14:07)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
@@ -154,9 +154,21 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
   - Successfully initialized Tauri app (`tauri_app`) with a transparent, undecorated, always-on-top window, and confirmed basic functionality.
   - Python FastAPI service (`vision_bridge.py`) created with a working `/screenshot` endpoint using `mss` and `Pillow`.
   - Implemented the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama.cpp`, using a JSON schema (`schemas/grid.json`) to get structured output.
+  - Tauri frontend (`tauri_app/ui/`) successfully polls `/screenshot` and displays a live thumbnail in the transparent overlay window. Backend CORS configured.
+  - Removed experimental hotkey code from Tauri Rust backend (`lib.rs`) to resolve compilation issues.
+  - Created `manage_dev.sh` script to simplify starting, stopping, and restarting the Python backend and Tauri frontend development servers.
 
 - **Next Steps:**
-  - Integrate Tauri frontend: poll `/screenshot`, display thumbnail, and send image data to `/predict` on hotkey (as per Section 5).
-  - Refine prompt and/or JSON schema to improve the detail and accuracy of the model's `grid_labels` and `actionable_cells` output.
+  - **Implement Prediction Trigger Mechanism:**
+    - Decide on and implement a method to trigger the screen capture and prediction process (e.g., a button in the Tauri UI, periodic trigger, etc.).
+    - When triggered, Tauri frontend (`main.js`) to: 
+      - Fetch current screenshot.
+      - Send screenshot image data to the `/predict` endpoint.
+      - Receive and log the model's JSON response (description, grid, actionable cells).
+  - **Display Model's Description in UI:**
+    - Update Tauri frontend to display the text `description` from the model's JSON response in the overlay window.
+  - **Refine Model Output & UI (Future):**
+    - Refine prompt and/or JSON schema to improve the detail/accuracy of `grid_labels` and `actionable_cells`.
+    - Explore UI enhancements for visualizing grid/actionable items.
 
 Happy hacking!
