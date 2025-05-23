@@ -68,15 +68,16 @@ WindowBuilder::new(app, "overlay", tauri::WindowUrl::App("index.html".into()))
 ------------------------------------------------------------
 Python service (vision_bridge.py) exposes:  
 • GET /screenshot – returns PNG bytes (mss + Pillow)  
-• POST /predict – body = JPEG; returns JSON grid labels from llama.cpp.
+• POST /predict – body = image (e.g., JPEG/PNG); returns JSON with a textual description from llama.cpp.
 
-Tauri front‑end polls /screenshot, paints thumbnail, sends to /predict on hot‑key.
+Tauri front‑end polls /screenshot, paints thumbnail, sends to /predict on user action.
 
-Example llama.cpp call:
+Example llama.cpp call (simplified, actual call in vision_bridge.py):
 
 ``python
-prompt = f"<image>\\n<|end|>\\nDescribe screen using 16x9 grid."
-out = llm.create_chat_completion([{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,{b64}"}}...]])
+prompt = f"<image>\nDescribe the content of the screen."
+# The vision_bridge.py script handles the specifics of calling llama-mtmd-cli
+# and processing its output.
 ``
 
 ------------------------------------------------------------
@@ -91,40 +92,19 @@ Run whisper.cpp in a separate thread:
 Append recognised tokens to context.txt; Tauri watches file for changes.
 
 ------------------------------------------------------------
-7. Grid‑to‑Click Mapper
-------------------------------------------------------------
-mapper.rs in Tauri:
-
-``rust
-fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
-  let (gw, gh) = (screen.0 / grid.0, screen.1 / grid.1);
-  let (x, y) = (col * gw + gw/2, row * gh + gh/2);
-  enigo::Enigo::mouse_move_to(x as i32, y as i32);
-  enigo::Enigo::mouse_click(enigo::MouseButton::Left);
-}
-``
-
-------------------------------------------------------------
 8. MVP Manual Test
 ------------------------------------------------------------
-1. Hot‑key ⌥ ⇧ P grabs screen, sends to SmolVLM.  
-2. Terminal shows JSON: {"button":"Start","cell":"E-3"}.  
-3. Press ⌥ ⌘ ⏎ → mapper performs the click.
+1. User triggers "Analyze Screen" in the UI.  
+2. Terminal (backend log) shows model processing.  
+3. UI displays the textual description of the screen content.
 
 ------------------------------------------------------------
-9. Stretch Milestones
+9. Future Ideas
 ------------------------------------------------------------
 • Goal stack + memory: simple SQLite table goals(id,descr,status,ts)  
 • Checkpoint/Undo: tmutil localsnapshot (macOS) or Btrfs snapshot on Linux.  
 • Accessibility fallback: query AXUIElement when VLM confidence < 0.5.  
 • Replace Python bridge with Rust gRPC once stable.
-
-------------------------------------------------------------
-10. Troubleshooting
-------------------------------------------------------------
-• If screenshot == black, grant “Screen Recording” permission in System Settings → Privacy & Security.  
-• llama.cpp OOM?  Lower n_gpu_layers or quantise to Q3_K_M.  
-• Overlay steals focus?  Call set_ignore_cursor_events(true) on the window.
 
 ------------------------------------------------------------
 11. References
@@ -141,7 +121,7 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 14:38)
+12. Current Project Status (as of 2025-05-22 19:23)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
@@ -153,26 +133,27 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
   - Proceeded with Tauri skeleton setup (as per Section 4) in `tauri_app` directory.
   - Successfully initialized Tauri app (`tauri_app`) with a transparent, undecorated, always-on-top window, and confirmed basic functionality.
   - Python FastAPI service (`vision_bridge.py`) created with a working `/screenshot` endpoint using `mss` and `Pillow`.
-  - Implemented the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama.cpp`, using a JSON schema (`schemas/grid.json`) to get structured output.
+  - Implemented the `/predict` endpoint in `vision_bridge.py` to handle model inference with `llama-mtmd-cli`, returning a textual description of the screen.
   - Tauri frontend (`tauri_app/ui/`) successfully polls `/screenshot` and displays a live thumbnail in the transparent overlay window. Backend CORS configured.
   - Removed experimental hotkey code from Tauri Rust backend (`lib.rs`) to resolve compilation issues.
-  - Created `manage_dev.sh` script to simplify starting, stopping, and restarting the Python backend and Tauri frontend development servers.
-  - Enabled standard window decorations (`tauri.conf.json`) allowing the app window to be dragged and resized.
-  - Changed window background from fully transparent to translucent (`style.css`) for better visibility.
   - Configured the Tauri window to be visible on all desktop workspaces on macOS (`lib.rs`).
   - Enabled content protection for the Tauri window (`lib.rs`) to prevent it from appearing in its own screenshots, avoiding the recursive zoom effect.
+  - Implemented background task processing for `/predict` endpoint in `vision_bridge.py` and polling logic in `main.js` to handle long-running model inference without client timeouts.
+  - Removed all grid-based analysis functionality (JSON schema, grid UI rendering) to simplify the project to direct screen description.
 
 - **Next Steps:**
-  - **Implement Prediction Trigger Mechanism:**
-    - Decide on and implement a method to trigger the screen capture and prediction process (e.g., a button in the Tauri UI, periodic trigger, etc.).
+  - **Implement Prediction Trigger Mechanism (Completed & Refined):**
+    - A button in the Tauri UI triggers the screen capture and prediction process.
     - When triggered, Tauri frontend (`main.js`) to: 
       - Fetch current screenshot.
-      - Send screenshot image data to the `/predict` endpoint.
-      - Receive and log the model's JSON response (description, grid, actionable cells).
-  - **Display Model's Description in UI:**
-    - Update Tauri frontend to display the text `description` from the model's JSON response in the overlay window.
-  - **Refine Model Output & UI (Future):**
-    - Refine prompt and/or JSON schema to improve the detail/accuracy of `grid_labels` and `actionable_cells`.
-    - Explore UI enhancements for visualizing grid/actionable items.
+      - Send screenshot image data to the `/predict` endpoint (which starts a background task).
+      - Poll for the result and receive the model's JSON response (containing the textual description).
+  - **Display Model's Description in UI (Completed & Refined):**
+    - Tauri frontend displays the text `description` from the model's JSON response in the overlay window.
+  - **Further Testing & Refinement:**
+    - Test thoroughly on various screen contents.
+    - Refine prompts if necessary for better descriptions.
+    - Investigate and optimize performance of model inference if needed.
+    - Consider UI/UX improvements for displaying the description.
 
 Happy hacking!
