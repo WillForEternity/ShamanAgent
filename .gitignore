@@ -3,6 +3,8 @@
 
 # Log files
 *.log
+*.pid
+*.bak
 
 # Model files
 smolvlm2-*.gguf

@@ -1,7 +1,7 @@
 body {
   font-family: sans-serif;
-  background-color: rgba(255, 255, 255, 0.2); /* Light translucent background */
-  color: #333; /* Dark gray text */
+  background-color: rgba(30, 30, 30, 0.85); /* Darker translucent background */
+  color: #f0f0f0; /* Light gray text for better readability */
   margin: 0;
   overflow: hidden; 
   display: flex;
@@ -9,7 +9,6 @@ body {
   height: 100vh; 
   padding: 15px; /* Add some padding to the body */
   box-sizing: border-box; /* Include padding in height/width calculation */
-  border: 1px solid white; /* Solid white border for the main window area */
 }
 
 #controls-container {
@@ -21,9 +20,8 @@ body {
 }
 
 #description-area {
-  background-color: rgba(255, 255, 255, 0.4); /* More opaque white for description bg */
-  border: 1px solid white; /* Solid white border */
-  color: #222; /* Darker text for description */
+  background-color: rgba(0, 0, 0, 0.3); /* Slightly darker background for contrast */
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   padding: 10px;
   margin-bottom: 10px;
@@ -41,9 +39,9 @@ body {
 #predict-button {
   padding: 10px 15px;
   font-size: 1em;
-  background-color: #6c757d; /* Bootstrap secondary-like color */
+  background-color: #007bff;
   color: white;
-  border: 1px solid white; /* Solid white border */
+  border: none;
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.3s ease;
@@ -51,15 +49,16 @@ body {
 }
 
 #predict-button:hover {
-  background-color: #5a6268; /* Darker shade for hover */
+  background-color: #0056b3;
 }
 
 #screenshot-thumbnail {
   width: 200px; /* Adjust width as desired */
   height: auto; /* Maintain aspect ratio */
-  border: 1px solid white; /* Solid white border */
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 5px;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); /* Lighter shadow */
+  /* margin: 15px; */ /* Margin is handled by body padding and container */
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
   align-self: flex-end; /* Align thumbnail to the bottom right of its space */
   object-fit: contain; /* Ensure image scales nicely */
 }

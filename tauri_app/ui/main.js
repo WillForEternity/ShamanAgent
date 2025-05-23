@@ -5,8 +5,30 @@ const screenshotImg = document.getElementById('screenshot-thumbnail');
 const predictButton = document.getElementById('predict-button');
 const descriptionArea = document.getElementById('description-area');
 
-const screenshotApiUrl = 'http://127.0.0.1:8000/screenshot';
-const predictApiUrl = 'http://127.0.0.1:8000/predict';
+const screenshotApiUrl = 'http://localhost:8000/screenshot';
+const predictApiUrl = 'http://localhost:8000/predict'; // This will now start the task
+const predictResultApiUrlBase = 'http://localhost:8000/predict/result/'; // For polling
+
+let pollingIntervalId = null; // To store the interval ID for polling
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initial screenshot load
+    updateScreenshot();
+
+    // Set interval to refresh screenshot (e.g., every 5 seconds)
+    setInterval(updateScreenshot, 5000);
+
+    if (predictButton) {
+        predictButton.addEventListener('click', () => {
+            // Clear any previous polling
+            if (pollingIntervalId) {
+                clearInterval(pollingIntervalId);
+                pollingIntervalId = null;
+            }
+            handlePrediction();
+        });
+    }
+});
 
 async function updateScreenshot() {
     console.log('Fetching screenshot...');
@@ -47,50 +69,104 @@ async function handlePrediction() {
         }
         const imageBlob = await screenshotResponse.blob();
 
-        // 2. Send this blob to the /predict endpoint
+        // 2. Send this blob to the /predict endpoint to start the task
         const formData = new FormData();
-        formData.append('image', imageBlob, 'screenshot.png'); // Changed 'file' to 'image'
+        formData.append('image', imageBlob, 'screenshot.png'); // 'image' is the expected field name by FastAPI
 
-        const predictResponse = await fetch(predictApiUrl, {
+        const initialPredictResponse = await fetch(predictApiUrl, {
             method: 'POST',
             body: formData,
         });
 
-        if (!predictResponse.ok) {
-            const errorText = await predictResponse.text();
-            throw new Error(`Prediction request failed: ${predictResponse.status} ${predictResponse.statusText} - ${errorText}`);
+        if (!initialPredictResponse.ok) {
+            const errorText = await initialPredictResponse.text();
+            throw new Error(`Failed to start prediction task: ${initialPredictResponse.status} ${initialPredictResponse.statusText} - ${errorText}`);
         }
 
-        const result = await predictResponse.json();
-        console.log('Prediction result:', result);
+        const taskData = await initialPredictResponse.json();
 
-        // 3. Display the description
-        if (result && result.description) {
-            // Sanitize and format the description if needed. For now, direct display.
-            // Replace newlines with <br> for HTML display
-            const formattedDescription = result.description.replace(/\n/g, '<br>');
-            descriptionArea.innerHTML = `<p>${formattedDescription}</p>`;
+        if (taskData.task_id && taskData.status === 'processing') {
+            descriptionArea.innerHTML = `Processing analysis (Task ID: ${taskData.task_id})...`;
+            // Start polling for the result
+            pollingIntervalId = setInterval(() => {
+                pollForResult(taskData.task_id, descriptionArea, predictButton);
+            }, 3000); // Poll every 3 seconds
         } else {
-            descriptionArea.innerHTML = '<p>No description received from the model.</p>';
+            throw new Error('Failed to get a valid task ID from the server.');
         }
 
     } catch (error) {
-        console.error('Error during prediction:', error);
+        console.error('Error starting prediction:', error);
         descriptionArea.innerHTML = `<p style="color: #ffdddd;">Error: ${error.message}</p>`;
-    } finally {
         predictButton.disabled = false;
     }
 }
 
-// Event listener for the predict button
-if (predictButton) {
-    predictButton.addEventListener('click', handlePrediction);
-} else {
-    console.error('Predict button not found on page load.');
+async function pollForResult(taskId, descriptionArea, predictButton) {
+    try {
+        const resultResponse = await fetch(`${predictResultApiUrlBase}${taskId}`);
+        if (!resultResponse.ok) {
+            // Stop polling on server error for the result endpoint
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+            throw new Error(`Polling failed: ${resultResponse.status} ${resultResponse.statusText}`);
+        }
+
+        const data = await resultResponse.json();
+
+        if (data.status === 'completed') {
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+            displayPredictionResult(data.result, descriptionArea);
+            predictButton.disabled = false;
+        } else if (data.status === 'failed') {
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+            let errorMsg = `<p style="color: #ffdddd;">Analysis failed: ${data.error || 'Unknown error'}</p>`;
+            if (data.details) {
+                errorMsg += `<p style="color: #ffdddd;">Details: ${data.details}</p>`;
+            }
+            descriptionArea.innerHTML = errorMsg;
+            predictButton.disabled = false;
+        } else if (data.status === 'processing') {
+            // Still processing, continue polling. Update UI if desired.
+            descriptionArea.innerHTML = `Processing analysis (Task ID: ${taskId})... (Status: ${data.status})`;
+        } else {
+            // Unknown status, stop polling
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+            throw new Error(`Unknown task status: ${data.status}`);
+        }
+    } catch (error) {
+        console.error('Error polling for result:', error);
+        // Stop polling on any error during polling itself
+        if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+        }
+        descriptionArea.innerHTML = `<p style="color: #ffdddd;">Error polling for results: ${error.message}</p>`;
+        predictButton.disabled = false;
+    }
 }
 
-// Update screenshot when the page loads
-updateScreenshot();
+function displayPredictionResult(data, descriptionArea) {
+    if (!data) {
+        descriptionArea.innerHTML = `<p class="error">Error: No result data received.</p>`;
+        return;
+    }
+    if (data.error) {
+        descriptionArea.innerHTML = `<p class="error">Error from model: ${data.error}</p>`;
+        if (data.details) {
+            descriptionArea.innerHTML += `<p class="error-details">Details: ${data.details}</p>`;
+        }
+    } else if (data.description) {
+        // Sanitize and format the description if needed. For now, direct display.
+        // Replace newlines with <br> for HTML display if desired, or use <pre> for preformatted text.
+        const formattedDescription = data.description.replace(/\n/g, '<br>');
+        descriptionArea.innerHTML = `<h3>Description:</h3><p>${formattedDescription}</p>`;
+    } else {
+        descriptionArea.innerHTML = `<p class="error">No description provided by the model.</p>`;
+    }
+}
 
-// Update screenshot every 2 seconds (2000 milliseconds)
-setInterval(updateScreenshot, 2000);
+// Helper to update UI elements consistently

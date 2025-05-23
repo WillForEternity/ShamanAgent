@@ -141,7 +141,7 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
 [10] Google blog: PaliGemma vision models.
 
 ------------------------------------------------------------
-12. Current Project Status (as of 2025-05-22 15:16)
+12. Current Project Status (as of 2025-05-22 14:38)
 ------------------------------------------------------------
 - **Completed:**
   - Initial project guide drafted.
@@ -161,17 +161,18 @@ fn click_cell(row:u32, col:u32, grid:(u32,u32), screen:(u32,u32)) {
   - Changed window background from fully transparent to translucent (`style.css`) for better visibility.
   - Configured the Tauri window to be visible on all desktop workspaces on macOS (`lib.rs`).
   - Enabled content protection for the Tauri window (`lib.rs`) to prevent it from appearing in its own screenshots, avoiding the recursive zoom effect.
-  - Added an 'Analyze Screen' button to the Tauri UI (`index.html`) and a `div` to display the model's description.
-  - Styled the new UI elements in `style.css`, including making the description area scrollable and implementing a light theme with white transparency (0.2) and solid white borders as requested.
-  - Implemented client-side JavaScript logic in `main.js` for the 'Analyze Screen' button to: fetch the current screenshot, send it to the `/predict` backend endpoint, and display the returned description in the UI.
-  - Resolved a 422 Unprocessable Entity error by correcting the `FormData` field name from `file` to `image` in `main.js` when sending data to the `/predict` endpoint.
 
 - **Next Steps:**
-  - **Test and Refine Core Functionality:**
-    - Thoroughly test the screen analysis and description display feature across different screen contents.
-    - Address any bugs or UI/UX issues identified during testing (e.g., text formatting, layout adjustments, error handling).
+  - **Implement Prediction Trigger Mechanism:**
+    - Decide on and implement a method to trigger the screen capture and prediction process (e.g., a button in the Tauri UI, periodic trigger, etc.).
+    - When triggered, Tauri frontend (`main.js`) to: 
+      - Fetch current screenshot.
+      - Send screenshot image data to the `/predict` endpoint.
+      - Receive and log the model's JSON response (description, grid, actionable cells).
+  - **Display Model's Description in UI:**
+    - Update Tauri frontend to display the text `description` from the model's JSON response in the overlay window.
   - **Refine Model Output & UI (Future):**
-    - Refine prompt and/or JSON schema to improve the detail/accuracy of `grid_labels` and `actionable_cells` from the SmolVLM model.
-    - Explore UI enhancements for visualizing grid/actionable items, potentially overlaying them on the screenshot thumbnail or main screen.
+    - Refine prompt and/or JSON schema to improve the detail/accuracy of `grid_labels` and `actionable_cells`.
+    - Explore UI enhancements for visualizing grid/actionable items.
 
 Happy hacking!

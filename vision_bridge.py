@@ -1,12 +1,14 @@
-from fastapi import FastAPI, Response, UploadFile, File
+from fastapi import FastAPI, Response, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import mss
 import io
 from PIL import Image
-import subprocess
+import asyncio
 import tempfile
 import os
 import json
+import uuid
+import traceback # Added for more detailed error logging
 
 app = FastAPI()
 
@@ -33,141 +35,168 @@ app.add_middleware(
 # Assuming vision_bridge.py is in the project root where a 'models' directory exists
 MODEL_PATH = "models/smolvlm2-q4km.gguf"
 MMPROJ_PATH = "models/smolvlm2-mmproj-f16.gguf"
-JSON_SCHEMA_PATH = "schemas/grid.json" # Added JSON schema path
 # Assumes 'llama-mtmd-cli' is in the system PATH
 # If not, you might need to provide a full path or ensure llama.cpp/build/bin is in PATH
 LLAMA_MTMD_CLI_PATH = "llama-mtmd-cli"
-PROMPT_TEMPLATE = "<image>\n<|end|>\nDescribe screen using 16x9 grid."
 
+# MODIFIED PROMPT_TEMPLATE:
+# Removed the non-standard "<|end|>" token.
+# This provides a clear instruction after the image placeholder.
+PROMPT_TEMPLATE = "<image>\nDescribe the content of the screen."
 
-@app.get("/screenshot")
-async def get_screenshot():
+# In-memory store for task statuses and results
+tasks = {}
+
+async def _run_model_inference_task(task_id: str, image_path: str):
+    """Helper function to run the model inference in the background."""
     try:
-        with mss.mss() as sct:
-            # Get a screenshot of the primary monitor
-            # sct.monitors[0] is all monitors together, [1] is the primary, [2] is secondary, etc.
-            # Adjust if you want a different monitor or all monitors combined.
-            monitor_number = 1 # Primary monitor
-            if len(sct.monitors) <= monitor_number:
-                # Fallback if primary monitor (index 1) isn't found (e.g., only one virtual display like sct.monitors[0])
-                # or handle more gracefully based on desired behavior.
-                # For now, grab the first available monitor details if primary isn't explicitly [1]
-                monitor_to_grab = sct.monitors[0] if sct.monitors else None
-            else:
-                monitor_to_grab = sct.monitors[monitor_number]
+        # Ensure model and projector files exist (already checked in main endpoint but good for standalone task)
+        if not os.path.exists(MODEL_PATH) or not os.path.exists(MMPROJ_PATH):
+            tasks[task_id] = {"status": "failed", "error": "Model or MMProj file not found during task execution."}
+            return
 
-            if not monitor_to_grab:
-                return Response(content="No monitors found to capture.", status_code=500)
-
-            sct_img = sct.grab(monitor_to_grab)
-
-            # Create a BytesIO object and save the image to it in PNG format
-            img_byte_arr = io.BytesIO()
-            # Create a PIL Image from the BGRA data captured by mss
-            # Use sct_img.bgra and specify the raw decoder for BGRA format
-            pil_image = Image.frombytes("RGBA", sct_img.size, sct_img.bgra, "raw", "BGRA")
-            # Save the PIL Image to the BytesIO object in PNG format
-            pil_image.save(img_byte_arr, format="PNG")
-            img_byte_arr.seek(0) # Go to the beginning of the BytesIO buffer
-
-            return Response(content=img_byte_arr.getvalue(), media_type="image/png")
-    except Exception as e:
-        print(f"Error capturing screenshot: {e}")
-        return Response(content=f"Error capturing screenshot: {e}", status_code=500)
-
-@app.post("/predict")
-async def post_predict(image: UploadFile = File(...)):
-    tmp_image_path = None  # Ensure tmp_image_path is defined for the finally block
-    try:
-        # Check if model, projector, and schema files exist
-        if not os.path.exists(MODEL_PATH):
-            return {"error": f"Model file not found: {MODEL_PATH}"}, 500
-        if not os.path.exists(MMPROJ_PATH):
-            return {"error": f"Projector file not found: {MMPROJ_PATH}"}, 500
-        if not os.path.exists(JSON_SCHEMA_PATH):
-            return {"error": f"JSON schema file not found: {JSON_SCHEMA_PATH}"}, 500
-
-        # Read JSON schema content
-        try:
-            with open(JSON_SCHEMA_PATH, 'r') as f_schema:
-                json_schema_content = f_schema.read()
-            # Validate if it's proper JSON, as llama-mtmd-cli is sensitive
-            json.loads(json_schema_content) 
-        except FileNotFoundError:
-            return {"error": f"JSON schema file not found during read: {JSON_SCHEMA_PATH}"}, 500
-        except json.JSONDecodeError as e_schema_json:
-            return {"error": f"Invalid JSON in schema file {JSON_SCHEMA_PATH}: {e_schema_json}"}, 500
-        except Exception as e_schema_read:
-            return {"error": f"Error reading JSON schema file {JSON_SCHEMA_PATH}: {e_schema_read}"}, 500
-
-        # Save uploaded image to a temporary file
-        # The CLI expects a file path, and the image will be JPEG as per ProjectGuide.
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_image_file:
-            content = await image.read()
-            tmp_image_file.write(content)
-            tmp_image_path = tmp_image_file.name
-        
         cmd = [
             LLAMA_MTMD_CLI_PATH,
             "-m", MODEL_PATH,
             "--mmproj", MMPROJ_PATH,
             "-p", PROMPT_TEMPLATE,
-            "--image", tmp_image_path,
-            "-ngl", "35",      # Number of GPU layers, from previous test
-            "--temp", "0.1",   # Temperature, from previous test
-            "-e",             # Escape prompt, from previous test
-            "--json-schema", json_schema_content # Pass schema content as string
+            "--image", image_path,
+            "-ngl", "35", # Number of layers to offload to GPU
+            "--temp", "0.1",
+            "-e", # Process escaped sequences in prompt
+            "-t", "4", # Number of threads (CPU)
+            # "-c", "2048", # Optionally set context size if default is problematic
+            # "--no-warmup" # Consider adding this if warmup is causing issues, though it's generally good.
         ]
 
-        # Run the command
-        process = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        print(f"Task {task_id}: Not using JSON schema for output.")
+
+        print(f"Task {task_id}: Running async command: {' '.join(cmd)}")
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout_bytes, stderr_bytes = await process.communicate()
+
+        stdout_str = stdout_bytes.decode('utf-8', errors='ignore').strip()
+        stderr_str = stderr_bytes.decode('utf-8', errors='ignore').strip()
 
         if process.returncode != 0:
-            error_message = (
+            error_details = (
                 f"llama-mtmd-cli failed with exit code {process.returncode}.\n"
                 f"Command: {' '.join(cmd)}\n"
-                f"Stderr: {process.stderr}\n"
-                f"Stdout: {process.stdout}"
+                f"Stderr: {stderr_str}\n"
+                f"Stdout: {stdout_str}"
             )
-            print(error_message)
-            return {"error": "Model inference failed", "details": error_message}, 500
+            print(f"Task {task_id}: {error_details}")
+            tasks[task_id] = {"status": "failed", "error": "Model inference failed", "details": error_details}
+            return
 
-        # Extract JSON from stdout (it might be embedded in logs)
-        output_content = process.stdout.strip()
-        json_start_index = output_content.find('{')
-        json_end_index = output_content.rfind('}')
-
-        if json_start_index != -1 and json_end_index != -1 and json_start_index < json_end_index:
-            json_string = output_content[json_start_index : json_end_index+1]
-            try:
-                result_json = json.loads(json_string)
-            except json.JSONDecodeError as e_json:
-                error_message = (
-                    f"Failed to decode JSON from extracted string.\nError: {e_json}\n"
-                    f"Extracted string: {json_string}\nFull stdout: {process.stdout}"
-                )
-                print(error_message)
-                return {"error": "Failed to parse model output", "details": error_message}, 500
+        # Parse output: expect plain text description
+        if stdout_str:
+             tasks[task_id] = {"status": "completed", "result": {"description": stdout_str.strip()}}
+             print(f"Task {task_id}: Model output (plain text): {stdout_str.strip()}")
         else:
-            error_message = (
-                f"Could not find JSON object in llama-mtmd-cli output.\n"
-                f"Stdout: {process.stdout}"
-            )
-            print(error_message)
-            return {"error": "No JSON output from model", "details": error_message}, 500
-            
-        return result_json
+            error_details = f"Model produced no output. Stderr: {stderr_str}"
+            print(f"Task {task_id}: {error_details}")
+            tasks[task_id] = {"status": "failed", "error": "No output from model", "details": error_details}
+
+    except Exception as e_task:
+        print(f"Task {task_id}: Error during model inference task: {e_task}")
+        traceback.print_exc()
+        tasks[task_id] = {"status": "failed", "error": "An unexpected error occurred during task execution", "details": str(e_task)}
+    finally:
+        if image_path and os.path.exists(image_path):
+            print(f"Task {task_id}: Cleaning up temporary image: {image_path}")
+            try:
+                os.remove(image_path)
+            except Exception as e_remove:
+                print(f"Task {task_id}: Error cleaning up temp file {image_path}: {e_remove}")
+
+@app.post("/predict")
+async def post_predict_start_task(image: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
+    # Ensure model and projector files exist (quick check before starting task)
+    if not os.path.exists(MODEL_PATH):
+        print(f"Error: Model file not found at {MODEL_PATH}")
+        raise HTTPException(status_code=500, detail="Model file not found")
+    if not os.path.exists(MMPROJ_PATH):
+        print(f"Error: MMProj file not found at {MMPROJ_PATH}")
+        raise HTTPException(status_code=500, detail="MMProj file not found")
+
+    tmp_image_path = None
+    try:
+        # Save uploaded image to a temporary file that the background task can access
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_image_file:
+            content = await image.read()
+            tmp_image_file.write(content)
+            tmp_image_path = tmp_image_file.name
+        
+        task_id = str(uuid.uuid4())
+        tasks[task_id] = {"status": "processing"} # Initial status
+
+        print(f"Scheduling background task {task_id} with image {tmp_image_path}")
+        background_tasks.add_task(_run_model_inference_task, task_id, tmp_image_path)
+        
+        return {"task_id": task_id, "status": "processing"}
 
     except Exception as e_main:
-        print(f"Error in /predict endpoint: {e_main}")
-        return {"error": f"An unexpected error occurred: {str(e_main)}"}, 500
-    finally:
+        print(f"Error in /predict (start_task) endpoint: {e_main}")
+        traceback.print_exc()
+        # Clean up temp file if created and an error occurs before task scheduling
         if tmp_image_path and os.path.exists(tmp_image_path):
-            os.remove(tmp_image_path)
+            try:
+                os.remove(tmp_image_path)
+            except Exception as e_remove_main:
+                print(f"Error cleaning up temp file {tmp_image_path} in main predict endpoint: {e_remove_main}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e_main)}")
+
+@app.get("/predict/result/{task_id}")
+async def get_predict_result(task_id: str):
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if task["status"] == "completed":
+        return {"task_id": task_id, "status": "completed", "result": task.get("result")}
+    elif task["status"] == "failed":
+        return {"task_id": task_id, "status": "failed", "error": task.get("error"), "details": task.get("details")}
+    else: # processing
+        return {"task_id": task_id, "status": "processing"}
+
+@app.get("/screenshot")
+async def get_screenshot():
+    try:
+        with mss.mss() as sct:
+            monitor_number = 1 # Primary monitor
+            if len(sct.monitors) <= monitor_number:
+                monitor_to_grab = sct.monitors[0] if sct.monitors else None
+            else:
+                monitor_to_grab = sct.monitors[monitor_number]
+
+            if not monitor_to_grab:
+                print("Error: No monitors found to capture.")
+                raise HTTPException(status_code=500, detail="No monitors found to capture.")
+
+            sct_img = sct.grab(monitor_to_grab)
+
+            img_byte_arr = io.BytesIO()
+            pil_image = Image.frombytes("RGBA", sct_img.size, sct_img.bgra, "raw", "BGRA")
+            pil_image.save(img_byte_arr, format="PNG")
+            img_byte_arr.seek(0)
+
+            return Response(content=img_byte_arr.getvalue(), media_type="image/png")
+    except Exception as e:
+        print(f"Error capturing screenshot: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error capturing screenshot: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    # It's common to run uvicorn from the command line:
-    # uvicorn vision_bridge:app --reload --port 8000
-    # But for direct script execution (less common for production):
+    # To run: uvicorn vision_bridge:app --reload --port 8000
+    print("Starting Uvicorn server on http://0.0.0.0:8000")
+    print(f"Model Path: {MODEL_PATH}")
+    print(f"MMProj Path: {MMPROJ_PATH}")
+    print(f"Llama CLI Path: {LLAMA_MTMD_CLI_PATH}")
+    print(f"Prompt Template: {PROMPT_TEMPLATE}")
     uvicorn.run(app, host="0.0.0.0", port=8000)
